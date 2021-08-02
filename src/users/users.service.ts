@@ -7,7 +7,6 @@ import {
 } from './dto/create-account-dto';
 import { LoginInput } from './dto/login.dto';
 import { User } from './entities/user.entity';
-import * as jwt from 'jsonwebtoken';
 import { JwtService } from 'src/jwt/jwt.service';
 
 @Injectable()

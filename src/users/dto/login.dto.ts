@@ -1,5 +1,5 @@
 import { Field, InputType, ObjectType, PickType } from '@nestjs/graphql';
-import { string } from 'joi';
+import { IsString } from 'class-validator';
 import { CoreOutput } from 'src/common/dto/output.dto';
 import { User } from '../entities/user.entity';
 
@@ -12,6 +12,7 @@ export class LoginInput extends PickType(
 
 @ObjectType()
 export class LoginOutput extends CoreOutput {
+  @IsString()
   @Field(() => String, { nullable: true })
   token?: string;
 }

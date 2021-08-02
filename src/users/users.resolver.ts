@@ -4,14 +4,15 @@ import {
   CreateAccountOutput,
 } from './dto/create-account-dto';
 import { LoginInput, LoginOutput } from './dto/login.dto';
+import { User } from './entities/user.entity';
 import { UsersService } from './users.service';
 
 @Resolver()
 export class UsersResolver {
   constructor(private readonly userService: UsersService) {}
 
-  @Query(() => Boolean)
-  isWorking() {
+  @Query(() => User)
+  me() {
     return true;
   }
 
