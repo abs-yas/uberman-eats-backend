@@ -13,4 +13,9 @@ export class JwtService {
     const ok = jwt.sign({ id: userId }, this.options.privateKey);
     return ok;
   }
+
+  verify(token: string) {
+    const decoded = jwt.verify(token, this.options.privateKey);
+    return decoded;
+  }
 }
