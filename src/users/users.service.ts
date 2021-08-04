@@ -12,6 +12,7 @@ import { UserProfileInput, UserProfileOutput } from './dto/user-profile.dto';
 import { EditProfileInput, EditProfileOutput } from './dto/edit-profile.dto';
 import { Verification } from './entities/verification.entity';
 import { VerifyEmailInput, VerifyEmailOutput } from './dto/verify-email.dto';
+import { MailService } from 'src/mail/mail.service';
 
 @Injectable()
 export class UsersService {
@@ -21,36 +22,42 @@ export class UsersService {
     @InjectRepository(Verification)
     private readonly verifications: Repository<Verification>,
     private readonly jwtService: JwtService,
+    private readonly mailService: MailService,
   ) {}
 
   // FIND USER BY ID
   async findById(userID: number): Promise<UserProfileOutput> {
     // userId is provided from ctx, and is only called once logged in
     const user = await this.users.findOne(userID);
-
-    switch (typeof user) {
-      case 'object': // user exists in the database
-        return {
-          OK: Boolean(user),
-          message: 'user profile successfully retrieved',
-          user,
-        };
-      case 'undefined': // user does not exist in the database
-        return {
-          OK: Boolean(user),
-          message: 'user not found',
-        };
+    try {
+      // perform case analysis
+      switch (typeof user) {
+        case 'object': // user exists in the database
+          return {
+            OK: Boolean(user),
+            message: 'user profile successfully retrieved',
+            user,
+          };
+        case 'undefined': // user does not exist in the database
+          return {
+            OK: Boolean(user),
+            message: 'user not found',
+          };
+      }
+    } catch {
+      return {
+        OK: false,
+        message: 'something went wrong',
+      };
     }
   }
 
   // FIND USER PROFILE BY ID
-
   async userProfile({ userID }: UserProfileInput): Promise<UserProfileOutput> {
     // return type is either user object or undefined - Sum type or discriminated union
     const user = await this.users.findOne(userID);
-
-    // perform case analysis
     try {
+      // perform case analysis
       switch (typeof user) {
         case 'object': // user exists in the database
           return {
@@ -95,7 +102,15 @@ export class UsersService {
             this.users.create({ email, password, role }),
           );
 
-          await this.verifications.save(this.verifications.create({ user }));
+          const verification = await this.verifications.save(
+            this.verifications.create({ user }),
+          );
+
+          // send email to the user
+          // this.mailService.sendVerificationEmail(
+          //   user.email.split('@')[0],
+          //   verification.code,
+          // );
           return { OK: true, message: 'account was successfully created' };
       }
     } catch {
@@ -156,11 +171,28 @@ export class UsersService {
       // perform case analysis
       switch (typeof user) {
         case 'object': // user exists in the database
-          if (email && email !== user.email) {
+          const emailTaken = await this.users.findOne({ email });
+
+          if (emailTaken) {
+            return {
+              OK: false,
+              message:
+                'email is already in use, please use a different email address',
+            };
+          }
+          if (email && !emailTaken) {
             user.email = email;
             user.isVerified = false;
             await this.verifications.delete({ user });
-            await this.verifications.save(this.verifications.create({ user }));
+            const newVerification = await this.verifications.save(
+              this.verifications.create({ user }),
+            );
+
+            // // send email to the user
+            // this.mailService.sendVerificationEmail(
+            //   user.email.split('@')[0],
+            //   newVerification.code,
+            // );
           }
           if (password) {
             user.password = password;
