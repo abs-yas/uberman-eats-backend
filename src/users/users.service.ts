@@ -10,19 +10,37 @@ import { User } from './entities/user.entity';
 import { JwtService } from 'src/jwt/jwt.service';
 import { UserProfileInput, UserProfileOutput } from './dto/user-profile.dto';
 import { EditProfileInput, EditProfileOutput } from './dto/edit-profile.dto';
+import { Verification } from './entities/verification.entity';
+import { VerifyEmailInput, VerifyEmailOutput } from './dto/verify-email.dto';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly users: Repository<User>,
+    @InjectRepository(Verification)
+    private readonly verifications: Repository<Verification>,
     private readonly jwtService: JwtService,
   ) {}
 
   // FIND USER BY ID
-  async findById(userID: number): Promise<User> {
+  async findById(userID: number): Promise<UserProfileOutput> {
+    // userId is provided from ctx, and is only called once logged in
     const user = await this.users.findOne(userID);
-    return user;
+
+    switch (typeof user) {
+      case 'object': // user exists in the database
+        return {
+          OK: Boolean(user),
+          message: 'user profile successfully retrieved',
+          user,
+        };
+      case 'undefined': // user does not exist in the database
+        return {
+          OK: Boolean(user),
+          message: 'user not found',
+        };
+    }
   }
 
   // FIND USER PROFILE BY ID
@@ -31,19 +49,26 @@ export class UsersService {
     // return type is either user object or undefined - Sum type or discriminated union
     const user = await this.users.findOne(userID);
 
-    switch (typeof user) {
-      case 'undefined':
-        return {
-          OK: Boolean(user),
-          message: 'user not found',
-        };
-
-      case 'object':
-        return {
-          OK: Boolean(user),
-          message: 'user profile successfully retrieved',
-          user,
-        };
+    // perform case analysis
+    try {
+      switch (typeof user) {
+        case 'object': // user exists in the database
+          return {
+            OK: Boolean(user),
+            message: 'user profile successfully retrieved',
+            user,
+          };
+        case 'undefined': // user does not exist in the database
+          return {
+            OK: Boolean(user),
+            message: 'user not found',
+          };
+      }
+    } catch {
+      return {
+        OK: false,
+        message: 'something went wrong',
+      };
     }
   }
 
@@ -53,47 +78,70 @@ export class UsersService {
     password,
     role,
   }: CreateAccountInput): Promise<CreateAccountOutput> {
+    // return kind is a sum type or discriminated union
     const user = await this.users.findOne({ email });
+    try {
+      // perform case analysis
+      switch (typeof user) {
+        case 'object': // user exists in the database
+          return {
+            OK: false,
+            message:
+              'account is already registered, please try a different email',
+          };
+        // user does not exist in the database, hence create & save user object to db
+        case 'undefined':
+          const user = await this.users.save(
+            this.users.create({ email, password, role }),
+          );
 
-    switch (typeof user) {
-      case 'object': // User exists in the databaseUser:
-        return {
-          OK: false,
-          message:
-            'account is already registered, please try a different email',
-        };
-
-      case 'undefined': // create & save user object
-        await this.users.save(this.users.create({ email, password, role }));
-        return { OK: true, message: 'account was successfully created' };
+          await this.verifications.save(this.verifications.create({ user }));
+          return { OK: true, message: 'account was successfully created' };
+      }
+    } catch {
+      return {
+        OK: false,
+        message: 'something went wrong',
+      };
     }
   }
 
   // LOGIN USER
   async login({ email, password }: LoginInput) {
-    const user = await this.users.findOne({ email });
-
-    switch (typeof user) {
-      case 'undefined':
-        return {
-          OK: false,
-          message: 'wrong account, user not found',
-        };
-      case 'object':
-        const correctPassword = await user.checkPassword(password);
-        if (!correctPassword) {
+    // return kind is a sum type or discriminated union
+    const user = await this.users.findOne(
+      { email },
+      { select: ['password', 'id'] },
+    );
+    try {
+      // perform case analysis
+      switch (typeof user) {
+        case 'object': // user exists in the database
+          const correctPassword = await user.checkPassword(password);
+          if (!correctPassword) {
+            return {
+              OK: false,
+              message: 'wrong password',
+            };
+          }
+          // generate token for authentication
+          const token = this.jwtService.sign(user.id);
+          return {
+            OK: true,
+            message: `welcome to Uberman Eats`,
+            token,
+          };
+        case 'undefined': // user does not exist in the database
           return {
             OK: false,
-            message: 'wrong password',
+            message: 'wrong account, user not found',
           };
-        }
-        // generate token for authentication
-        const token = this.jwtService.sign(user.id);
-        return {
-          OK: true,
-          message: 'logged in successfully',
-          token,
-        };
+      }
+    } catch {
+      return {
+        OK: false,
+        message: 'something went wrong',
+      };
     }
   }
 
@@ -102,29 +150,73 @@ export class UsersService {
     userID: number,
     { email, password }: EditProfileInput,
   ): Promise<EditProfileOutput> {
+    // return kind is a sum type or discriminated union
     const user = await this.users.findOne(userID);
+    try {
+      // perform case analysis
+      switch (typeof user) {
+        case 'object': // user exists in the database
+          if (email && email !== user.email) {
+            user.email = email;
+            user.isVerified = false;
+            await this.verifications.delete({ user });
+            await this.verifications.save(this.verifications.create({ user }));
+          }
+          if (password) {
+            user.password = password;
+          }
+          const account = await this.users.save(user);
+          console.log(password);
+          return {
+            OK: Boolean(user),
+            message: 'user profile successfully updated',
+            user: account,
+          };
 
-    switch (typeof user) {
-      case 'undefined':
-        return {
-          OK: Boolean(user),
-          message: 'user not found',
-        };
+        case 'undefined': // user does not exist in the database
+          return {
+            OK: Boolean(user),
+            message: 'user not found',
+          };
+      }
+    } catch {
+      return {
+        OK: false,
+        message: 'something went wrong',
+      };
+    }
+  }
 
-      case 'object':
-        if (email) {
-          user.email = email;
-        }
-        if (password) {
-          user.password = password;
-        }
-        const updatedUser = await this.users.save(user);
+  // VERIFY EMAIL
+  async verifyEmail({ code }: VerifyEmailInput): Promise<VerifyEmailOutput> {
+    // return kind is a sum type or discriminated union
+    const verification = await this.verifications.findOne(
+      { code },
+      { relations: ['user'] },
+    );
+    try {
+      // perform case analysis
+      switch (typeof verification) {
+        case 'object': // verification exists in the database & has a user entity
+          verification.user.isVerified = true;
+          await this.users.save(verification.user);
+          await this.verifications.delete(verification.id);
+          return {
+            OK: true,
+            message: 'account successfully verified',
+          };
 
-        return {
-          OK: Boolean(user),
-          message: 'user profile successfully updated',
-          user: updatedUser,
-        };
+        case 'undefined': // verification does not exist in the database
+          return {
+            OK: Boolean(verification),
+            message: 'wrong verification code or verification code has expired',
+          };
+      }
+    } catch {
+      return {
+        OK: false,
+        message: 'something went wrong',
+      };
     }
   }
 }

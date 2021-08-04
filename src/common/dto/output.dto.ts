@@ -5,6 +5,6 @@ export class CoreOutput {
   @Field(() => Boolean)
   OK: boolean;
 
-  @Field(() => String)
-  message: string;
+  @Field(() => String, { nullable: true })
+  message?: string;
 }

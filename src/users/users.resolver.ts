@@ -9,6 +9,7 @@ import {
 import { EditProfileInput, EditProfileOutput } from './dto/edit-profile.dto';
 import { LoginInput, LoginOutput } from './dto/login.dto';
 import { UserProfileInput, UserProfileOutput } from './dto/user-profile.dto';
+import { VerifyEmailInput, VerifyEmailOutput } from './dto/verify-email.dto';
 import { User } from './entities/user.entity';
 import { UsersService } from './users.service';
 
@@ -29,7 +30,7 @@ export class UsersResolver {
   async userProfile(
     @Args() userProfileInput: UserProfileInput,
   ): Promise<UserProfileOutput> {
-    return await this.userService.userProfile(userProfileInput);
+    return this.userService.userProfile(userProfileInput);
   }
 
   // CREATE ACCOUNT MUTATIOM
@@ -37,13 +38,13 @@ export class UsersResolver {
   async createAccount(
     @Args('input') createAccountInput: CreateAccountInput,
   ): Promise<CreateAccountOutput> {
-    return await this.userService.createAccount(createAccountInput);
+    return this.userService.createAccount(createAccountInput);
   }
 
   //  LOGIN MUTATION
   @Mutation(() => LoginOutput)
   async login(@Args('input') loginInput: LoginInput) {
-    return await this.userService.login(loginInput);
+    return this.userService.login(loginInput);
   }
 
   //  EDIT USER PROFILE
@@ -54,6 +55,14 @@ export class UsersResolver {
     { id }: User,
     @Args('input') editProfileInput: EditProfileInput,
   ): Promise<EditProfileOutput> {
-    return await this.userService.editProfile(id, editProfileInput);
+    return this.userService.editProfile(id, editProfileInput);
+  }
+
+  // VERIFY EMAIL
+  @Mutation(() => VerifyEmailOutput)
+  async verifyEmail(
+    @Args('input') verifyEmailInput: VerifyEmailInput,
+  ): Promise<VerifyEmailOutput> {
+    return this.userService.verifyEmail(verifyEmailInput);
   }
 }
